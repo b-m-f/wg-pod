@@ -5,7 +5,7 @@ A tool to quickly join your [podman](https://podman.io/) container/pod into a Wi
 ## Explanation
 
 wg-pod wires up the tools **ip**,**route**,[wg](https://git.zx2c4.com/wireguard) and podman.
-It creates a WireGuard interface inside of the containers network namespace and routes all container traffic through that interface.
+It creates a WireGuard interface inside of the containers network namespace and routes all traffic defined as `AllowedIPs` through the WireGuard interface.
 
 Existing interfaces in the namespace are not deleted and a route that is more specific than the default route in the namespace will still match.
 This means that the container will be able to talk over both the WireGuard network and the original network that was created for it by podman.

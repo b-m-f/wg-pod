@@ -111,16 +111,12 @@ func JoinContainerIntoNetwork(name string, pathToConfig string) error {
 		return fmt.Errorf("%s\n %s", "Problem when activating the WireGuard interface", err.Error())
 	}
 
-	//## Delete the default route if it was created
-	_, err = executeCommand("ip", []string{"-n", namespace, "route", "del", "default"})
-	if err != nil {
-		return fmt.Errorf("%s %s\n %s", "Problem when removing the default route in", namespace, err.Error())
-	}
-
-	//## Set the new default route to go over the WireGuard interface
-	_, err = executeCommand("ip", []string{"-n", namespace, "route", "add", "default", "dev", name})
-	if err != nil {
-		return fmt.Errorf("%s %s %s %s\n %s", "Problem when setting the default route in", namespace, "to go through", name, err.Error())
+	//## Set a new route for all peers AllowedIPs to go over the WireGuard interface
+	for _, peer := range config.Peers {
+		_, err = executeCommand("ip", []string{"-n", namespace, "route", "add", peer.AllowedIPs, "dev", name})
+		if err != nil {
+			return fmt.Errorf("%s %s %s %s\n %s", "Problem when setting the default route in", namespace, "to go through", name, err.Error())
+		}
 	}
 
 	return nil
