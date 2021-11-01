@@ -21,7 +21,7 @@ This means that the container will be able to talk over both the WireGuard netwo
 
 ### Flags
 
-- `ports (optional)`: comma separated list of ports to remap from the interface to the container
+- `port-remapping (optional)`: comma separated list of ports to remap from the interface to the container
 
 
 # Dependencies
@@ -29,6 +29,9 @@ This means that the container will be able to talk over both the WireGuard netwo
 - Linux
 - write permissions to `/run/containers`
 - permissions to change the network `CAP_NET_ADMIN`
+- nftables
+- ip
+- wireguard
 
 ## Cool automation
 
