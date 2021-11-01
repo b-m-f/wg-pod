@@ -16,8 +16,13 @@ This means that the container will be able to talk over both the WireGuard netwo
 
 ### Parameters
 
-- `--container`: specify the name of the container that should get connected into the network
-- `--config`: absolute path to the [wireguard config](./docs/wireguard-config)
+- `container_name (required)`: specify the name of the container that should get connected into the network
+- `config_path (required)`: absolute path to the [wireguard config](./docs/wireguard-config)
+
+### Flags
+
+- `ports (optional)`: comma separated list of ports to remap from the interface to the container
+
 
 # Dependencies
 

@@ -32,13 +32,16 @@ package cmd
 
 import (
 	"errors"
+	"fmt"
+	"strconv"
+	"strings"
 
 	"github.com/b-m-f/wg-pod/pkg/join"
+	"github.com/b-m-f/wg-pod/pkg/nftables"
 	"github.com/spf13/cobra"
 )
 
-var ContainerName string
-var ConfigPath string
+var PortMapInput string
 
 // joinCmd represents the join command
 var joinCmd = &cobra.Command{
@@ -47,7 +50,12 @@ var joinCmd = &cobra.Command{
 	Long: `Add a container/pod into a WireGuard network
 
 [name]: Container Name
-[path]: absolute path to the WireGuard config`,
+[path]: absolute path to the WireGuard config
+
+Example
+
+wg-pod join webapp /etc/wireguard/webapp.conf --port 3030:443,3031:8080
+`,
 	Args: func(cmd *cobra.Command, args []string) error {
 		if len(args) < 2 {
 			return errors.New("requires at least two arg")
@@ -59,7 +67,33 @@ var joinCmd = &cobra.Command{
 		return nil
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		err := join.JoinContainerIntoNetwork(args[0], args[1])
+		portMappings := []nftables.PortMap{}
+		// Split always returns array of at least len == 1
+		for _, pair := range strings.Split(PortMapInput, ",") {
+			portMap := nftables.PortMap{}
+			if pair == "" {
+				// no ports were provided
+				break
+			}
+			ports := strings.Split(pair, ":")
+			if ports[0] == "" || len(ports) < 2 {
+				return fmt.Errorf("incorrect portmapping provided: %v", ports)
+			}
+
+			interfacePort, err := getPortFromString(ports[0])
+			if err != nil {
+				return err
+			}
+
+			containerPort, err := getPortFromString(ports[1])
+			if err != nil {
+				return err
+			}
+			portMap.Container = containerPort
+			portMap.Interface = interfacePort
+			portMappings = append(portMappings, portMap)
+		}
+		err := join.JoinContainerIntoNetwork(args[0], args[1], portMappings)
 		if err != nil {
 			return err
 
@@ -69,5 +103,41 @@ var joinCmd = &cobra.Command{
 }
 
 func init() {
+	joinCmd.Flags().StringVarP(&PortMapInput, "port-remapping", "p", "", "Comma separated list of PortMapping from interface into container")
 	rootCmd.AddCommand(joinCmd)
+}
+
+// 80/tcp to {[port: 80, protocol: tcp]}
+func getPortFromString(input string) (nftables.Port, error) {
+	numberAndProtocolSplit := strings.Split(input, "/")
+
+	port := nftables.Port{}
+
+	if len(numberAndProtocolSplit) > 2 {
+		return port, errors.New("incorrect portmapping provided")
+	}
+	if len(numberAndProtocolSplit) < 2 {
+		castPortNumber, err := strconv.ParseUint(numberAndProtocolSplit[0], 10, 16)
+		if err != nil {
+			return port, fmt.Errorf("incorrect Port provided: %s. Example: 80/tcp", numberAndProtocolSplit[0])
+		}
+		port.Number = uint16(castPortNumber)
+		port.Protocol = nftables.TCP
+	} else {
+		castPortNumber, err := strconv.ParseUint(numberAndProtocolSplit[0], 10, 16)
+		if err != nil {
+			return port, fmt.Errorf("incorrect Port provided: %s. Example: 80/tcp", numberAndProtocolSplit[0])
+		}
+		port.Number = uint16(castPortNumber)
+		switch numberAndProtocolSplit[1] {
+		case "tcp":
+			port.Protocol = nftables.TCP
+		case "udp":
+			port.Protocol = nftables.UDP
+		default:
+			return port, errors.New("wrong Interface protocol provided. Valid: tcp & udp")
+		}
+	}
+	return port, nil
+
 }

@@ -34,19 +34,20 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/b-m-f/wg-pod/pkg/nftables"
 	"github.com/b-m-f/wg-pod/pkg/podman"
 	"github.com/b-m-f/wg-pod/pkg/shell"
 	"github.com/b-m-f/wg-pod/pkg/wireguard"
 )
 
-func JoinContainerIntoNetwork(name string, pathToConfig string) error {
+func JoinContainerIntoNetwork(name string, pathToConfig string, portMappings []nftables.PortMap) error {
 
 	namespace, err := podman.GetNamespace(name)
 	if err != nil {
 		return fmt.Errorf("%s\n %s", "Problem when trying to determine the Network namespace", err.Error())
 	}
 	// Get the Network Namespace that Podman has set up for the container
-	fmt.Printf("Adding container %s into namespace %s\n", name, namespace)
+	fmt.Printf("Adding container %s into WireGuard network defined in %s\n", name, pathToConfig)
 
 	config, err := wireguard.GetConfig(pathToConfig)
 	if err != nil {
@@ -59,24 +60,28 @@ func JoinContainerIntoNetwork(name string, pathToConfig string) error {
 	if err := os.WriteFile(privateKeyPath, []byte(config.Interface.PrivateKey), 0600); err != nil {
 		return fmt.Errorf("%s\n %s", "problem when creating a temporary key file for the WireGuard interface", err.Error())
 	}
+	fmt.Printf("Create temporary private key file for WireGuard interface at %s \n", privateKeyPath)
 
 	// Add a new Wireguard interface with the name of the container
 	_, err = shell.ExecuteCommand("ip", []string{"link", "add", name, "type", "wireguard"})
 	if err != nil {
 		return fmt.Errorf("%s\n %s", "Problem when trying to create the new interface", err.Error())
 	}
+	fmt.Printf("Added new WireGuard interface %s\n", name)
 
 	// Move the interface into the Network Namespace created by Podman
 	_, err = shell.ExecuteCommand("ip", []string{"link", "set", name, "netns", namespace})
 	if err != nil {
-		return fmt.Errorf("%s\n %s", "Problem when moving the WireGuard interface into the container namespace", err.Error())
+		return fmt.Errorf("problem when moving the WireGuard interface %s into the container namespace %s \n%s", name, namespace, err.Error())
 	}
+	fmt.Printf("Added WireGuard interface %s to network namespace %s\n", name, namespace)
 
 	// Set the IP address of the WireGuard interface
 	_, err = shell.ExecuteCommand("ip", []string{"-n", namespace, "addr", "add", config.Interface.Address, "dev", name})
 	if err != nil {
-		return fmt.Errorf("%s\n %s", "Problem when setting the IP address for the WireGuard interface", err.Error())
+		return fmt.Errorf("problem when setting the IP address %s for the WireGuard interface %s in namespace %s,\n %s", config.Interface.Address, name, namespace, err.Error())
 	}
+	fmt.Printf("Set IP address of WireGuard interface %s in namespace %s to %s\n", name, namespace, config.Interface.Address)
 
 	// Set the config onto the Interface
 	arguments := []string{"netns", "exec", namespace, "wg", "set", name, "private-key", privateKeyPath}
@@ -85,20 +90,32 @@ func JoinContainerIntoNetwork(name string, pathToConfig string) error {
 	}
 	_, err = shell.ExecuteCommand("ip", arguments)
 	if err != nil {
-		return fmt.Errorf("%s\n %s", "Problem when configuring WireGuard interface", err.Error())
+		return fmt.Errorf("problem when configuring WireGuard interface %s in namespace %s with config %s\n%s", name, namespace, pathToConfig, err.Error())
 	}
+	fmt.Printf("Set Config %s onto WireGuard interface %s in namespace %s\n", pathToConfig, name, namespace)
 
 	//## Set the interface active
 	_, err = shell.ExecuteCommand("ip", []string{"-n", namespace, "link", "set", name, "up"})
 	if err != nil {
-		return fmt.Errorf("%s\n %s", "Problem when activating the WireGuard interface", err.Error())
+		return fmt.Errorf("problem when activating the WireGuard interface %s in namespace %s\n%s", name, namespace, err.Error())
 	}
+
+	fmt.Printf("Activated WireGuard interface %s in namespace %s \n", name, namespace)
 
 	//## Set a new route for all peers AllowedIPs to go over the WireGuard interface
 	for _, peer := range config.Peers {
 		_, err = shell.ExecuteCommand("ip", []string{"-n", namespace, "route", "add", peer.AllowedIPs, "dev", name})
 		if err != nil {
-			return fmt.Errorf("%s %s %s %s\n %s", "Problem when setting the default route in", namespace, "to go through", name, err.Error())
+			return fmt.Errorf("problem when setting the default route in %s to go through %s\n %s", namespace, name, err.Error())
+		}
+		fmt.Printf("Route %s in namespace %s through WireGuard interface %s \n", peer.AllowedIPs, namespace, name)
+	}
+
+	// Set up port mapping if provided
+	if len(portMappings) > 0 {
+		err := nftables.CreatePortMappings(namespace, name, portMappings)
+		if err != nil {
+			return err
 		}
 	}
 
