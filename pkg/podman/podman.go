@@ -31,31 +31,14 @@ POSSIBILITY OF SUCH DAMAGE.
 package podman
 
 import (
-	"bytes"
-	"fmt"
-	"os/exec"
 	"path"
 	"strings"
+
+	"github.com/b-m-f/wg-pod/pkg/shell"
 )
 
-func executeCommand(app string, args []string) (string, error) {
-	cmd := exec.Command(app, args...)
-
-	var std_out bytes.Buffer
-	var std_err bytes.Buffer
-	cmd.Stdout = &std_out
-	cmd.Stderr = &std_err
-	err := cmd.Run()
-
-	if err != nil {
-		return "", fmt.Errorf("%s", std_err.String())
-	}
-	return std_out.String(), nil
-
-}
-
 func GetNamespace(name string) (string, error) {
-	namespaceFileOnSystem, err := executeCommand("podman", []string{"inspect", "--format", "{{.NetworkSettings.SandboxKey}}", name})
+	namespaceFileOnSystem, err := shell.ExecuteCommand("podman", []string{"inspect", "--format", "{{.NetworkSettings.SandboxKey}}", name})
 	if err != nil {
 		return "", err
 

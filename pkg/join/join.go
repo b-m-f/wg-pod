@@ -31,30 +31,13 @@ POSSIBILITY OF SUCH DAMAGE.
 package join
 
 import (
-	"bytes"
 	"fmt"
 	"os"
-	"os/exec"
 
 	"github.com/b-m-f/wg-pod/pkg/podman"
+	"github.com/b-m-f/wg-pod/pkg/shell"
 	"github.com/b-m-f/wg-pod/pkg/wireguard"
 )
-
-func executeCommand(app string, args []string) (string, error) {
-	cmd := exec.Command(app, args...)
-
-	var std_out bytes.Buffer
-	var std_err bytes.Buffer
-	cmd.Stdout = &std_out
-	cmd.Stderr = &std_err
-	err := cmd.Run()
-
-	if err != nil {
-		return "", fmt.Errorf("%s", std_err.String())
-	}
-	return std_out.String(), nil
-
-}
 
 func JoinContainerIntoNetwork(name string, pathToConfig string) error {
 
@@ -78,19 +61,19 @@ func JoinContainerIntoNetwork(name string, pathToConfig string) error {
 	}
 
 	// Add a new Wireguard interface with the name of the container
-	_, err = executeCommand("ip", []string{"link", "add", name, "type", "wireguard"})
+	_, err = shell.ExecuteCommand("ip", []string{"link", "add", name, "type", "wireguard"})
 	if err != nil {
 		return fmt.Errorf("%s\n %s", "Problem when trying to create the new interface", err.Error())
 	}
 
 	// Move the interface into the Network Namespace created by Podman
-	_, err = executeCommand("ip", []string{"link", "set", name, "netns", namespace})
+	_, err = shell.ExecuteCommand("ip", []string{"link", "set", name, "netns", namespace})
 	if err != nil {
 		return fmt.Errorf("%s\n %s", "Problem when moving the WireGuard interface into the container namespace", err.Error())
 	}
 
 	// Set the IP address of the WireGuard interface
-	_, err = executeCommand("ip", []string{"-n", namespace, "addr", "add", config.Interface.Address, "dev", name})
+	_, err = shell.ExecuteCommand("ip", []string{"-n", namespace, "addr", "add", config.Interface.Address, "dev", name})
 	if err != nil {
 		return fmt.Errorf("%s\n %s", "Problem when setting the IP address for the WireGuard interface", err.Error())
 	}
@@ -100,20 +83,20 @@ func JoinContainerIntoNetwork(name string, pathToConfig string) error {
 	for _, peer := range config.Peers {
 		arguments = append(arguments, "peer", peer.PublicKey, "allowed-ips", peer.AllowedIPs, "endpoint", peer.Endpoint, "persistent-keepalive", fmt.Sprint(peer.KeepAlive))
 	}
-	_, err = executeCommand("ip", arguments)
+	_, err = shell.ExecuteCommand("ip", arguments)
 	if err != nil {
 		return fmt.Errorf("%s\n %s", "Problem when configuring WireGuard interface", err.Error())
 	}
 
 	//## Set the interface active
-	_, err = executeCommand("ip", []string{"-n", namespace, "link", "set", name, "up"})
+	_, err = shell.ExecuteCommand("ip", []string{"-n", namespace, "link", "set", name, "up"})
 	if err != nil {
 		return fmt.Errorf("%s\n %s", "Problem when activating the WireGuard interface", err.Error())
 	}
 
 	//## Set a new route for all peers AllowedIPs to go over the WireGuard interface
 	for _, peer := range config.Peers {
-		_, err = executeCommand("ip", []string{"-n", namespace, "route", "add", peer.AllowedIPs, "dev", name})
+		_, err = shell.ExecuteCommand("ip", []string{"-n", namespace, "route", "add", peer.AllowedIPs, "dev", name})
 		if err != nil {
 			return fmt.Errorf("%s %s %s %s\n %s", "Problem when setting the default route in", namespace, "to go through", name, err.Error())
 		}
