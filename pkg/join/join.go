@@ -64,19 +64,12 @@ func JoinContainerIntoNetwork(containerName string, pathToConfig string, portMap
 	}
 	fmt.Printf("Create temporary private key file for WireGuard interface at %s \n", privateKeyPath)
 
-	// Add a new Wireguard interface
-	_, err = shell.ExecuteCommand("ip", []string{"link", "add", interfaceName, "type", "wireguard"})
+	// Add a new Wireguard interface inside the container namespace
+	_, err = shell.ExecuteCommand("ip", []string{"-n", namespace, "link", "add", interfaceName, "type", "wireguard"})
 	if err != nil {
 		return fmt.Errorf("%s\n %s", "Problem when trying to create the new interface", err.Error())
 	}
 	fmt.Printf("Added new WireGuard interface %s\n", interfaceName)
-
-	// Move the interface into the Network Namespace created by Podman
-	_, err = shell.ExecuteCommand("ip", []string{"link", "set", interfaceName, "netns", namespace})
-	if err != nil {
-		return fmt.Errorf("problem when moving the WireGuard interface %s into the container namespace %s \n%s", interfaceName, namespace, err.Error())
-	}
-	fmt.Printf("Added WireGuard interface %s to network namespace %s\n", interfaceName, namespace)
 
 	// Set the IP address of the WireGuard interface
 	_, err = shell.ExecuteCommand("ip", []string{"-n", namespace, "addr", "add", config.Interface.Address, "dev", interfaceName})
