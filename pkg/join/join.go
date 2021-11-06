@@ -37,30 +37,36 @@ import (
 	"github.com/b-m-f/wg-pod/pkg/nftables"
 	"github.com/b-m-f/wg-pod/pkg/podman"
 	"github.com/b-m-f/wg-pod/pkg/shell"
+	"github.com/b-m-f/wg-pod/pkg/uuid"
 	"github.com/b-m-f/wg-pod/pkg/wireguard"
 )
 
-const interfaceName = "podman-wg0"
-
 func JoinContainerIntoNetwork(containerName string, pathToConfig string, portMappings []nftables.PortMap) error {
+	uuid, err := uuid.GetUUID()
+	if err != nil {
+		return fmt.Errorf("problem when creating a UUID for the interface\n %s", err.Error())
+	}
+	// maximum length for an interface name by default is 15 bytes.
+	// podman- takes 7, so get 8 additional ones from the uuid
+	interfaceName := fmt.Sprintf("podman-%s", uuid[0:7])
 
 	namespace, err := podman.GetNamespace(containerName)
 	if err != nil {
-		return fmt.Errorf("%s\n %s", "Problem when trying to determine the Network namespace", err.Error())
+		return fmt.Errorf("problem when trying to determine the Network namespace\n %s", err.Error())
 	}
 	// Get the Network Namespace that Podman has set up for the container
 	fmt.Printf("Adding container %s into WireGuard network defined in %s\n", containerName, pathToConfig)
 
 	config, err := wireguard.GetConfig(pathToConfig)
 	if err != nil {
-		return fmt.Errorf("%s\n %s", "Problem when trying to read the wg-quick config", err.Error())
+		return fmt.Errorf("problem when trying to read the wg-quick config\n %s", err.Error())
 	}
 
 	// Create a temporary private key file
 	os.MkdirAll("/run/containers/network", 0700)
 	privateKeyPath := "/run/containers/network/" + containerName + ".pkey"
 	if err := os.WriteFile(privateKeyPath, []byte(config.Interface.PrivateKey), 0600); err != nil {
-		return fmt.Errorf("%s\n %s", "problem when creating a temporary key file for the WireGuard interface", err.Error())
+		return fmt.Errorf("problem when creating a temporary key file for the WireGuard interface\n %s", err.Error())
 	}
 	fmt.Printf("Create temporary private key file for WireGuard interface at %s \n", privateKeyPath)
 
