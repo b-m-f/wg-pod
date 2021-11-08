@@ -41,7 +41,7 @@ import (
 	"github.com/b-m-f/wg-pod/pkg/wireguard"
 )
 
-func JoinContainerIntoNetwork(containerName string, pathToConfig string, portMappings []nftables.PortMap) error {
+func JoinContainerIntoNetwork(containerName string, pathToConfig string, portMappings []nftables.PortMap, deleteDefault bool) error {
 	uuid, err := uuid.GetUUID()
 	if err != nil {
 		return fmt.Errorf("problem when creating a UUID for the interface\n %s", err.Error())
@@ -71,11 +71,18 @@ func JoinContainerIntoNetwork(containerName string, pathToConfig string, portMap
 	fmt.Printf("Create temporary private key file for WireGuard interface at %s \n", privateKeyPath)
 
 	// Add a new Wireguard interface inside the container namespace
-	_, err = shell.ExecuteCommand("ip", []string{"-n", namespace, "link", "add", interfaceName, "type", "wireguard"})
+	_, err = shell.ExecuteCommand("ip", []string{"link", "add", interfaceName, "type", "wireguard"})
 	if err != nil {
-		return fmt.Errorf("%s\n %s", "Problem when trying to create the new interface", err.Error())
+		return fmt.Errorf("problem when trying to create the new interface\n %s", err.Error())
 	}
 	fmt.Printf("Added new WireGuard interface %s\n", interfaceName)
+
+	// Move interface into container namespace
+	_, err = shell.ExecuteCommand("ip", []string{"link", "set", interfaceName, "netns", namespace})
+	if err != nil {
+		return fmt.Errorf("problem when trying to move WireGuard interface %s to namespace %s \n %s", interfaceName, namespace, err.Error())
+	}
+	fmt.Printf("Moved WireGuard interface %s to namespace %s\n", interfaceName, namespace)
 
 	// Set the IP address of the WireGuard interface
 	_, err = shell.ExecuteCommand("ip", []string{"-n", namespace, "addr", "add", config.Interface.Address, "dev", interfaceName})
@@ -110,6 +117,17 @@ func JoinContainerIntoNetwork(containerName string, pathToConfig string, portMap
 	}
 
 	fmt.Printf("Activated WireGuard interface %s in namespace %s \n", interfaceName, namespace)
+
+	// Delete default route if desirec
+	if deleteDefault {
+		_, err = shell.ExecuteCommand("ip", []string{"-n", namespace, "route", "del", "default"})
+		if err != nil {
+			return fmt.Errorf("problem when deleting the default route in namespace %s\n%s", namespace, err.Error())
+		}
+
+		fmt.Printf("Successfully deleted the default route in namespace %s \n", namespace)
+
+	}
 
 	//## Set a new route for all peers AllowedIPs to go over the WireGuard interface
 	for _, peer := range config.Peers {

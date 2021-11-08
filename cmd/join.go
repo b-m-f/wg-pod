@@ -42,6 +42,7 @@ import (
 )
 
 var PortMapInput string
+var DeleteDefault bool
 
 // joinCmd represents the join command
 var joinCmd = &cobra.Command{
@@ -93,7 +94,7 @@ wg-pod join webapp /etc/wireguard/webapp.conf --port 3030:443,3031:8080
 			portMap.Interface = interfacePort
 			portMappings = append(portMappings, portMap)
 		}
-		err := join.JoinContainerIntoNetwork(args[0], args[1], portMappings)
+		err := join.JoinContainerIntoNetwork(args[0], args[1], portMappings, DeleteDefault)
 		if err != nil {
 			return err
 
@@ -104,6 +105,7 @@ wg-pod join webapp /etc/wireguard/webapp.conf --port 3030:443,3031:8080
 
 func init() {
 	joinCmd.Flags().StringVarP(&PortMapInput, "port-remapping", "p", "", "Comma separated list of PortMapping from interface into container")
+	joinCmd.Flags().BoolVarP(&DeleteDefault, "delete-default-route", "d", false, "Delete the default route in the container namespace")
 	rootCmd.AddCommand(joinCmd)
 }
 
