@@ -37,46 +37,52 @@ import (
 	"github.com/b-m-f/wg-pod/pkg/nftables"
 	"github.com/b-m-f/wg-pod/pkg/podman"
 	"github.com/b-m-f/wg-pod/pkg/shell"
+	"github.com/b-m-f/wg-pod/pkg/uuid"
 	"github.com/b-m-f/wg-pod/pkg/wireguard"
 )
 
-const interfaceName = "podman-wg0"
-
-func JoinContainerIntoNetwork(containerName string, pathToConfig string, portMappings []nftables.PortMap) error {
+func JoinContainerIntoNetwork(containerName string, pathToConfig string, portMappings []nftables.PortMap, deleteDefault bool) error {
+	uuid, err := uuid.GetUUID()
+	if err != nil {
+		return fmt.Errorf("problem when creating a UUID for the interface\n %s", err.Error())
+	}
+	// maximum length for an interface name by default is 15 bytes.
+	// podman- takes 7, so get 8 additional ones from the uuid
+	interfaceName := fmt.Sprintf("podman-%s", uuid[0:7])
 
 	namespace, err := podman.GetNamespace(containerName)
 	if err != nil {
-		return fmt.Errorf("%s\n %s", "Problem when trying to determine the Network namespace", err.Error())
+		return fmt.Errorf("problem when trying to determine the Network namespace\n %s", err.Error())
 	}
 	// Get the Network Namespace that Podman has set up for the container
 	fmt.Printf("Adding container %s into WireGuard network defined in %s\n", containerName, pathToConfig)
 
 	config, err := wireguard.GetConfig(pathToConfig)
 	if err != nil {
-		return fmt.Errorf("%s\n %s", "Problem when trying to read the wg-quick config", err.Error())
+		return fmt.Errorf("problem when trying to read the wg-quick config\n %s", err.Error())
 	}
 
 	// Create a temporary private key file
 	os.MkdirAll("/run/containers/network", 0700)
 	privateKeyPath := "/run/containers/network/" + containerName + ".pkey"
 	if err := os.WriteFile(privateKeyPath, []byte(config.Interface.PrivateKey), 0600); err != nil {
-		return fmt.Errorf("%s\n %s", "problem when creating a temporary key file for the WireGuard interface", err.Error())
+		return fmt.Errorf("problem when creating a temporary key file for the WireGuard interface\n %s", err.Error())
 	}
 	fmt.Printf("Create temporary private key file for WireGuard interface at %s \n", privateKeyPath)
 
-	// Add a new Wireguard interface
+	// Add a new Wireguard interface inside the container namespace
 	_, err = shell.ExecuteCommand("ip", []string{"link", "add", interfaceName, "type", "wireguard"})
 	if err != nil {
-		return fmt.Errorf("%s\n %s", "Problem when trying to create the new interface", err.Error())
+		return fmt.Errorf("problem when trying to create the new interface\n %s", err.Error())
 	}
 	fmt.Printf("Added new WireGuard interface %s\n", interfaceName)
 
-	// Move the interface into the Network Namespace created by Podman
+	// Move interface into container namespace
 	_, err = shell.ExecuteCommand("ip", []string{"link", "set", interfaceName, "netns", namespace})
 	if err != nil {
-		return fmt.Errorf("problem when moving the WireGuard interface %s into the container namespace %s \n%s", interfaceName, namespace, err.Error())
+		return fmt.Errorf("problem when trying to move WireGuard interface %s to namespace %s \n %s", interfaceName, namespace, err.Error())
 	}
-	fmt.Printf("Added WireGuard interface %s to network namespace %s\n", interfaceName, namespace)
+	fmt.Printf("Moved WireGuard interface %s to namespace %s\n", interfaceName, namespace)
 
 	// Set the IP address of the WireGuard interface
 	_, err = shell.ExecuteCommand("ip", []string{"-n", namespace, "addr", "add", config.Interface.Address, "dev", interfaceName})
@@ -88,7 +94,15 @@ func JoinContainerIntoNetwork(containerName string, pathToConfig string, portMap
 	// Set the config onto the Interface
 	arguments := []string{"netns", "exec", namespace, "wg", "set", interfaceName, "private-key", privateKeyPath}
 	for _, peer := range config.Peers {
-		arguments = append(arguments, "peer", peer.PublicKey, "allowed-ips", peer.AllowedIPs, "endpoint", peer.Endpoint, "persistent-keepalive", fmt.Sprint(peer.KeepAlive))
+		arguments = append(arguments, "peer", peer.PublicKey)
+		arguments = append(arguments, "allowed-ips", peer.AllowedIPs)
+		if peer.Endpoint != "" {
+			arguments = append(arguments, "endpoint", peer.Endpoint)
+
+		}
+		if peer.KeepAlive != 0 {
+			arguments = append(arguments, "persistent-keepalive", fmt.Sprint(peer.KeepAlive))
+		}
 	}
 	_, err = shell.ExecuteCommand("ip", arguments)
 	if err != nil {
@@ -103,6 +117,17 @@ func JoinContainerIntoNetwork(containerName string, pathToConfig string, portMap
 	}
 
 	fmt.Printf("Activated WireGuard interface %s in namespace %s \n", interfaceName, namespace)
+
+	// Delete default route if desirec
+	if deleteDefault {
+		_, err = shell.ExecuteCommand("ip", []string{"-n", namespace, "route", "del", "default"})
+		if err != nil {
+			return fmt.Errorf("problem when deleting the default route in namespace %s\n%s", namespace, err.Error())
+		}
+
+		fmt.Printf("Successfully deleted the default route in namespace %s \n", namespace)
+
+	}
 
 	//## Set a new route for all peers AllowedIPs to go over the WireGuard interface
 	for _, peer := range config.Peers {
