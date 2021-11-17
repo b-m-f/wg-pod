@@ -4,11 +4,11 @@ A tool to quickly join your [podman](https://podman.io/) container/pod into a Wi
 
 ## Explanation
 
-wg-pod wires up the tools **ip**,**route**,[wg](https://git.zx2c4.com/wireguard) and podman.
+wg-pod wires up the tools **ip**,**route**,[wg](https://git.zx2c4.com/wireguard) and **podman**.
 It creates a WireGuard interface inside of the host namespace, moves it into the container namespace and then routes all traffic defined as `AllowedIPs` through the WireGuard interface.
-The initial creation in the host namespace is done to assure that the interface can reach its Endpoint even if the default route in the container namespace is being deleted.
+The initial creation in the host namespace is done to assure that the interface can reach its Endpoint even if the default route in the container namespace is deleted.
 
-Existing interfaces in the namespace are not deleted and a route that is more specific than the default route in the namespace will still match.
+Existing interfaces in the namespace are not deleted by default and even if this is done a route that is more specific than the default route in the namespace will still match.
 This means that the container will be able to talk over both the WireGuard network and the original network that was created for it by podman.
 
 # Commands
@@ -38,8 +38,8 @@ This means that the container will be able to talk over both the WireGuard netwo
 
 ### systemd
 
-Check out [quadlet](https://github.com/containers/quadlet) first to see how to easily generated systemd unit files.
-Use `wg-pod` inside the `ExecStartPost` lifecycle of the quadlet container file to spawn containers into a network directly after creation.
+Check out [quadlet](https://github.com/containers/quadlet) first to see how to easily generate systemd unit files.
+Use `wg-pod` inside the `ExecStartPost` lifecycle of the quadlet `.container` file to spawn containers into a network directly after creation.
 Of course this also works with plain systemd unit files if you prefer not to use quadlet.
 
 ### All traffic through the container
