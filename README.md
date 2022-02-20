@@ -53,3 +53,4 @@ Your container can now talk to other containers if it is inside a pod, but route
 
 - Make sure that no user (not even root) can edit around network configurations inside your container. (`CAP_NET_ADMIN` must not be given)
 - The Host network that was set up during container creation is still reachable with routing rules more specific than the default route to the WireGuard VPN
+
