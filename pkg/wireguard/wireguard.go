@@ -46,7 +46,7 @@ type Interface struct {
 
 type Peer struct {
 	Endpoint   string
-	AllowedIPs string
+	AllowedIPs []string
 	PublicKey  string
 	KeepAlive  int64
 }
@@ -112,7 +112,13 @@ func GetConfig(path string) (Config, error) {
 				case "Endpoint":
 					config.Peers[currentPeer].Endpoint = stringParts[2]
 				case "AllowedIPs":
-					config.Peers[currentPeer].AllowedIPs = stringParts[2]
+					for i, v := range stringParts {
+						noSpace := strings.Replace(v," ","", -1)
+						noComma := strings.Replace(noSpace, ",","",-1)
+						if i >= 2 && v != " " && len(v) > 0 {
+							config.Peers[currentPeer].AllowedIPs = append(config.Peers[currentPeer].AllowedIPs, noComma)
+						}
+    					}
 				case "PublicKey":
 					config.Peers[currentPeer].PublicKey = stringParts[2]
 				case "PersistentKeepalive":

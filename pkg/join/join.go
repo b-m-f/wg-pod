@@ -95,7 +95,17 @@ func JoinContainerIntoNetwork(containerName string, pathToConfig string, portMap
 	arguments := []string{"netns", "exec", namespace, "wg", "set", interfaceName, "private-key", privateKeyPath}
 	for _, peer := range config.Peers {
 		arguments = append(arguments, "peer", peer.PublicKey)
-		arguments = append(arguments, "allowed-ips", peer.AllowedIPs)
+		arguments = append(arguments, "allowed-ips")
+
+		ips := ""
+		for _, ip := range peer.AllowedIPs {
+			if len(ips) > 0  {
+			ips = ips + "," + ip
+			} else {
+			ips = ips + ip
+			}
+		}
+	        arguments = append(arguments,ips)
 		if peer.Endpoint != "" {
 			arguments = append(arguments, "endpoint", peer.Endpoint)
 
@@ -131,11 +141,13 @@ func JoinContainerIntoNetwork(containerName string, pathToConfig string, portMap
 
 	//## Set a new route for all peers AllowedIPs to go over the WireGuard interface
 	for _, peer := range config.Peers {
-		_, err = shell.ExecuteCommand("ip", []string{"-n", namespace, "route", "add", peer.AllowedIPs, "dev", interfaceName})
+		for _, ip:= range peer.AllowedIPs{
+		_, err = shell.ExecuteCommand("ip", []string{"-n", namespace, "route", "add", ip , "dev", interfaceName})
 		if err != nil {
 			return fmt.Errorf("problem when setting the default route in %s to go through %s\n %s", namespace, interfaceName, err.Error())
 		}
-		fmt.Printf("Route %s in namespace %s through WireGuard interface %s \n", peer.AllowedIPs, namespace, interfaceName)
+		fmt.Printf("Route %s in namespace %s through WireGuard interface %s \n", ip, namespace, interfaceName)
+	  }
 	}
 
 	// Set up port mapping if provided
