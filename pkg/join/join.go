@@ -35,13 +35,14 @@ import (
 	"os"
 
 	"github.com/b-m-f/wg-pod/pkg/nftables"
+	"github.com/b-m-f/wg-pod/pkg/ip"
 	"github.com/b-m-f/wg-pod/pkg/podman"
 	"github.com/b-m-f/wg-pod/pkg/shell"
 	"github.com/b-m-f/wg-pod/pkg/uuid"
 	"github.com/b-m-f/wg-pod/pkg/wireguard"
 )
 
-func JoinContainerIntoNetwork(containerName string, pathToConfig string, portMappings []nftables.PortMap, deleteDefault bool) error {
+func JoinContainerIntoNetwork(containerName string, pathToConfig string, portMappings []nftables.PortMap, deleteDefault bool, additionalRoutes []ip.Route) error {
 	uuid, err := uuid.GetUUID()
 	if err != nil {
 		return fmt.Errorf("problem when creating a UUID for the interface\n %s", err.Error())
@@ -153,6 +154,14 @@ func JoinContainerIntoNetwork(containerName string, pathToConfig string, portMap
 	// Set up port mapping if provided
 	if len(portMappings) > 0 {
 		err := nftables.CreatePortMappings(namespace, interfaceName, portMappings)
+		if err != nil {
+			return err
+		}
+	}
+
+	// establish additional routes	
+	if len(additionalRoutes) > 0 {
+		err := ip.CreateRoute(namespace, additionalRoutes)
 		if err != nil {
 			return err
 		}

@@ -35,13 +35,16 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"net"
 
 	"github.com/b-m-f/wg-pod/pkg/join"
+	"github.com/b-m-f/wg-pod/pkg/ip"
 	"github.com/b-m-f/wg-pod/pkg/nftables"
 	"github.com/spf13/cobra"
 )
 
 var PortMapInput string
+var AdditionalRoutes string
 var DeleteDefault bool
 
 // joinCmd represents the join command
@@ -94,7 +97,36 @@ wg-pod join webapp /etc/wireguard/webapp.conf --port 3030:443,3031:8080
 			portMap.Interface = interfacePort
 			portMappings = append(portMappings, portMap)
 		}
-		err := join.JoinContainerIntoNetwork(args[0], args[1], portMappings, DeleteDefault)
+
+
+		additionalRoutes := []ip.Route{}
+		// Split always returns array of at least len == 1
+		for _, pair := range strings.Split(AdditionalRoutes, ",") {
+			route := ip.Route{}
+			if pair == "" {
+				// no ports were provided
+				break
+			}
+			addr := strings.Split(pair, ":")
+			if addr[0] == "" || len(addr) < 2 {
+				return fmt.Errorf("incorrect route provided: %v", addr)
+			}
+
+			target := net.ParseIP(addr[0])
+			if target == nil {
+				return fmt.Errorf("incorrect target provided: %v", target)
+			}
+
+			gateway := net.ParseIP(addr[1])
+			if target == nil {
+				return fmt.Errorf("incorrect gatewat provided: %v", gateway)
+			}
+			route.Gateway = gateway
+			route.Target = target
+			additionalRoutes = append(additionalRoutes, route)
+		}
+
+		err := join.JoinContainerIntoNetwork(args[0], args[1], portMappings, DeleteDefault, additionalRoutes)
 		if err != nil {
 			return err
 
@@ -105,6 +137,7 @@ wg-pod join webapp /etc/wireguard/webapp.conf --port 3030:443,3031:8080
 
 func init() {
 	joinCmd.Flags().StringVarP(&PortMapInput, "port-remapping", "p", "", "Comma separated list of PortMapping from interface into container")
+	joinCmd.Flags().StringVarP(&AdditionalRoutes, "add-route", "a", "", "Comma separated list of target:gateway pairs")
 	joinCmd.Flags().BoolVarP(&DeleteDefault, "delete-default-route", "d", false, "Delete the default route in the container namespace")
 	rootCmd.AddCommand(joinCmd)
 }

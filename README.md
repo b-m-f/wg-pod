@@ -24,6 +24,7 @@ This means that the container will be able to talk over both the WireGuard netwo
 
 - `port-remapping (optional)`: comma separated list of ports to remap from the interface to the container
 - `delete-default (optional, default false)`: Remove the default route in the container namespace
+- `add-route $target:$gateway (optional)`: Add an additional route 
 
 # Dependencies
 
