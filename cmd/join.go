@@ -33,12 +33,12 @@ package cmd
 import (
 	"errors"
 	"fmt"
+	"net"
 	"strconv"
 	"strings"
-	"net"
 
-	"github.com/b-m-f/wg-pod/pkg/join"
 	"github.com/b-m-f/wg-pod/pkg/ip"
+	"github.com/b-m-f/wg-pod/pkg/join"
 	"github.com/b-m-f/wg-pod/pkg/nftables"
 	"github.com/spf13/cobra"
 )
@@ -98,7 +98,6 @@ wg-pod join webapp /etc/wireguard/webapp.conf --port 3030:443,3031:8080
 			portMappings = append(portMappings, portMap)
 		}
 
-
 		additionalRoutes := []ip.Route{}
 		// Split always returns array of at least len == 1
 		for _, pair := range strings.Split(AdditionalRoutes, ",") {
@@ -112,17 +111,41 @@ wg-pod join webapp /etc/wireguard/webapp.conf --port 3030:443,3031:8080
 				return fmt.Errorf("incorrect route provided: %v", addr)
 			}
 
-			target := net.ParseIP(addr[0])
-			if target == nil {
-				return fmt.Errorf("incorrect target provided: %v", target)
+			var target *net.IPNet
+
+			if strings.Contains(addr[0], "/") {
+				_, cidr, err := net.ParseCIDR(addr[0])
+				if err != nil {
+					return fmt.Errorf("incorrect target provided: %v", target)
+				}
+				target = cidr
+			} else {
+				ip := net.ParseIP(addr[0])
+				_, cidr, err := net.ParseCIDR(ip.String() + "/32")
+				if err != nil {
+					return fmt.Errorf("incorrect target provided: %v", target)
+				}
+				target = cidr
 			}
 
-			gateway := net.ParseIP(addr[1])
-			if target == nil {
-				return fmt.Errorf("incorrect gatewat provided: %v", gateway)
+			var gateway *net.IPNet
+
+			if strings.Contains(addr[1], "/") {
+				_, cidr, err := net.ParseCIDR(addr[1])
+				if err != nil {
+					return fmt.Errorf("incorrect target provided: %v", target)
+				}
+				gateway = cidr
+			} else {
+				ip := net.ParseIP(addr[1])
+				_, cidr, err := net.ParseCIDR(ip.String() + "/32")
+				if err != nil {
+					return fmt.Errorf("incorrect target provided: %v", target)
+				}
+				gateway = cidr
 			}
-			route.Gateway = gateway
-			route.Target = target
+			route.Gateway = *gateway
+			route.Target = *target
 			additionalRoutes = append(additionalRoutes, route)
 		}
 
