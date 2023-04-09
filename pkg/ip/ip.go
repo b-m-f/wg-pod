@@ -17,7 +17,7 @@ func CreateRoute(namespace string, additionalRoutes []Route) error {
 	for _, route := range additionalRoutes {
 		_, err := shell.ExecuteCommand("ip", []string{
 			"netns", "exec", namespace, "ip",
-			"route", "add", fmt.Sprint(route.Target.String()), "via", fmt.Sprint(route.Gateway.String()),
+			"route", "add", fmt.Sprint(route.Target.String()), "via", fmt.Sprint(route.Gateway.IP.String()),
 		})
 		fmt.Printf("Routing to %s via %s in namespace %s\n", route.Target.String(), route.Gateway.String(), namespace)
 		if err != nil {
