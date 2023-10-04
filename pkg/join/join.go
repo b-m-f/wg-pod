@@ -97,7 +97,11 @@ func JoinContainerIntoNetwork(containerName string, pathToConfig string, portMap
 	for _, peer := range config.Peers {
 		arguments = append(arguments, "peer", peer.PublicKey)
 		if peer.PresharedKey != "" {
-		  arguments = append(arguments, "preshared-key", peer.PresharedKey)
+	            presharedKeyPath := "/run/containers/network/" + containerName + ".pskey"
+	            if err := os.WriteFile(presharedKeyPath, []byte(peer.PresharedKey), 0600); err != nil {
+	                    return fmt.Errorf("problem when creating a temporary key file for the PresharedKey\n %s", err.Error())
+	            }
+	    	    arguments = append(arguments, "preshared-key", presharedKeyPath)
 		}
 		arguments = append(arguments, "allowed-ips")
 
