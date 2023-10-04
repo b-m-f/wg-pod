@@ -49,6 +49,7 @@ type Peer struct {
 	AllowedIPs []string
 	PublicKey  string
 	KeepAlive  int64
+	PresharedKey string
 }
 
 type Config struct {
@@ -67,6 +68,7 @@ type Config struct {
 // Endpoint = 1.1.1.1:11111
 // AllowedIPs = 10.0.0.0/8
 // PublicKey = gC+ly0/V4jXu+K4k+nqiEGo/4On5wXu56FvSyj1tnkQ=
+// PresharedKey = gC+ly0/V4jXu+K4k+nqiEGo/4On5wXu56FvSyj1tnkQ=
 // PersistentKeepalive = 25
 
 func GetConfig(path string) (Config, error) {
@@ -121,6 +123,8 @@ func GetConfig(path string) (Config, error) {
     					}
 				case "PublicKey":
 					config.Peers[currentPeer].PublicKey = stringParts[2]
+				case "PresharedKey":
+					config.Peers[currentPeer].PresharedKey= stringParts[2]
 				case "PersistentKeepalive":
 					keepAlive, err := strconv.ParseInt(stringParts[2], 10, 64)
 					if err != nil {

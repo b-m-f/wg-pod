@@ -96,6 +96,9 @@ func JoinContainerIntoNetwork(containerName string, pathToConfig string, portMap
 	arguments := []string{"netns", "exec", namespace, "wg", "set", interfaceName, "private-key", privateKeyPath}
 	for _, peer := range config.Peers {
 		arguments = append(arguments, "peer", peer.PublicKey)
+		if peer.PresharedKey != "" {
+		  arguments = append(arguments, "preshared-key", peer.PresharedKey)
+		}
 		arguments = append(arguments, "allowed-ips")
 
 		ips := ""
@@ -109,7 +112,6 @@ func JoinContainerIntoNetwork(containerName string, pathToConfig string, portMap
 	        arguments = append(arguments,ips)
 		if peer.Endpoint != "" {
 			arguments = append(arguments, "endpoint", peer.Endpoint)
-
 		}
 		if peer.KeepAlive != 0 {
 			arguments = append(arguments, "persistent-keepalive", fmt.Sprint(peer.KeepAlive))
